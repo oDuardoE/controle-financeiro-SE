@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle financeiro dos Momotis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.3.2/uuid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .modal-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 40;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-backdrop.show {
+            display: flex;
+            opacity: 1;
+        }
+        .modal {
+            transform: translateY(50px);
+            opacity: 0;
+            transition: all 0.3s ease-in-out;
+        }
+        .modal-backdrop.show .modal {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .animate-spin-slow {
+            animation: spin 2s linear infinite;
+        }
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 3px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        input:disabled {
+            background-color: #374151;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-300 antialiased">
+
+    <div id="app" class="max-w-4xl mx-auto p-4 md:p-6">
+
+        <!-- Cabeçalho -->
+        <header class="mb-6">
+            <h1 class="text-3xl font-bold text-white text-center">Controle financeiro dos Momotis</h1>
+            <p class="text-center text-slate-400 mt-1">Sua vida financeira sob controle.</p>
+        </header>
+        
+        <div id="loading-indicator" class="flex justify-center items-center my-10">
+             <div class="animate-spin-slow h-10 w-10 border-4 border-cyan-500 border-t-transparent rounded-full"></div>
+             <p class="ml-4 text-lg">Carregando dados...</p>
+        </div>
+        
+        <main id="main-content" class="hidden">
+            <!-- Resumo do Mês -->
+            <section id="summary" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="bg-slate-800 p-4 rounded-lg shadow-md border border-slate-700">
+                    <h3 class="text-sm font-medium text-slate-400">Entradas do Mês</h3>
+                    <p id="total-income" class="text-2xl font-semibold text-green-400">R$ 0,00</p>
+                </div>
+                <div class="bg-slate-800 p-4 rounded-lg shadow-md border border-slate-700">
+                    <h3 class="text-sm font-medium text-slate-400">Saídas do Mês</h3>
+                    <p id="total-expense" class="text-2xl font-semibold text-red-400">R$ 0,00</p>
+                </div>
+                <div class="bg-slate-800 p-4 rounded-lg shadow-md border border-slate-700">
+                    <h3 class="text-sm font-medium text-slate-400">Saldo do Mês</h3>
+                    <p id="month-balance" class="text-2xl font-semibold text-white">R$ 0,00</p>
+                </div>
+            </section>
+            
+            <!-- Navegação de Mês e Ações -->
+            <section id="controls" class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                <div class="flex items-center gap-4 bg-slate-800 px-4 py-2 rounded-lg border border-slate-700">
+                    <button id="prev-month" class="p-2 rounded-md hover:bg-slate-700 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    </button>
+                    <h2 id="current-month-year" class="text-xl font-semibold text-white w-48 text-center"></h2>
+                    <button id="next-month" class="p-2 rounded-md hover:bg-slate-700 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                    <button id="add-recurring-income-btn" class="w-full md:w-auto bg-teal-600 text-white font-semibold px-4 py-3 rounded-lg shadow-md hover:bg-teal-700 transition-all transform hover:scale-105">
+                        + Renda Recorrente
+                    </button>
+                    <button id="add-recurring-expense-btn" class="w-full md:w-auto bg-rose-600 text-white font-semibold px-4 py-3 rounded-lg shadow-md hover:bg-rose-700 transition-all transform hover:scale-105">
+                        + Despesa Recorrente
+                    </button>
+                    <button id="add-transaction-btn" class="w-full md:w-auto bg-cyan-600 text-white font-semibold px-4 py-3 rounded-lg shadow-md hover:bg-cyan-700 transition-all transform hover:scale-105">
+                        + Lançamento Único
+                    </button>
+                </div>
+            </section>
+    
+            <!-- Lista de Lançamentos -->
+            <section id="transactions">
+                <div class="bg-slate-800 rounded-lg shadow-md border border-slate-700 min-h-[300px]">
+                    <div id="transactions-list" class="p-4 space-y-3 max-h-[50vh] overflow-y-auto custom-scroll">
+                        <!-- Lançamentos serão inseridos aqui -->
+                    </div>
+                    <p id="no-transactions" class="text-slate-400 text-center py-10 hidden">Nenhum lançamento para este mês.</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal para Lançamento Único -->
+    <div id="transaction-modal" class="modal-backdrop">
+        <div class="modal bg-slate-800 w-11/12 max-w-lg rounded-lg shadow-xl border border-slate-700">
+            <form id="transaction-form" class="p-6 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-white">Novo Lançamento Único</h2>
+                     <button type="button" class="close-modal-btn text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+                </div>
+                <!-- Form fields -->
+                <div>
+                    <label for="description" class="block text-sm font-medium text-slate-400 mb-1">Descrição</label>
+                    <input type="text" id="description" name="description" required class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="amount" class="block text-sm font-medium text-slate-400 mb-1">Valor (R$)</label>
+                        <input type="number" id="amount" name="amount" step="0.01" required placeholder="150,00" class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                    </div>
+                    <div>
+                        <label for="date" class="block text-sm font-medium text-slate-400 mb-1">Data</label>
+                        <input type="date" id="date" name="date" required class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-slate-400 mb-1">Tipo</label>
+                        <div class="flex gap-2">
+                            <label class="flex-1">
+                                <input type="radio" name="type" value="income" checked class="sr-only peer">
+                                <div class="w-full p-2 text-center bg-slate-700 rounded-md cursor-pointer peer-checked:bg-green-600 peer-checked:font-semibold peer-checked:text-white transition-colors">Entrada</div>
+                            </label>
+                            <label class="flex-1">
+                                <input type="radio" name="type" value="expense" class="sr-only peer">
+                                <div class="w-full p-2 text-center bg-slate-700 rounded-md cursor-pointer peer-checked:bg-red-600 peer-checked:font-semibold peer-checked:text-white transition-colors">Saída</div>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label for="owner" class="block text-sm font-medium text-slate-400 mb-1">Dono</label>
+                        <select id="owner" name="owner" class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            <option value="edu">Edu</option>
+                            <option value="sarinea">Sarinea</option>
+                            <option value="conjunto">Conjunto</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="expense-options" class="hidden">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="category" class="block text-sm font-medium text-slate-400 mb-1">Categoria</label>
+                            <select id="category" name="category" class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                                <option>Alimentação</option> <option>Moradia</option> <option>Transporte</option> <option>Lazer</option> <option>Saúde</option> <option>Contas</option> <option>Compras</option> <option>Outros</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="installments" class="block text-sm font-medium text-slate-400 mb-1">Parcelas</label>
+                            <input type="number" id="installments" name="installments" value="1" min="1" class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end pt-4">
+                    <button type="submit" class="bg-cyan-600 text-white font-semibold px-6 py-2 rounded-lg shadow-md hover:bg-cyan-700 transition-colors">Salvar Lançamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para Renda Recorrente -->
+    <div id="recurring-income-modal" class="modal-backdrop">
+        <div class="modal bg-slate-800 w-11/12 max-w-lg rounded-lg shadow-xl border border-slate-700">
+            <form id="recurring-income-form" class="p-6 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-white">Nova Renda Recorrente</h2>
+                     <button type="button" class="close-modal-btn text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+                </div>
+                <!-- Form fields -->
+                <div>
+                    <label for="recurring-income-description" class="block text-sm font-medium text-slate-400 mb-1">Descrição</label>
+                    <input type="text" id="recurring-income-description" name="description" required class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="recurring-income-amount" class="block text-sm font-medium text-slate-400 mb-1">Valor Mensal (R$)</label>
+                        <input type="number" id="recurring-income-amount" name="amount" step="0.01" required placeholder="3000,00" class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    </div>
+                    <div>
+                        <label for="recurring-income-owner" class="block text-sm font-medium text-slate-400 mb-1">Dono</label>
+                        <select id="recurring-income-owner" name="owner" class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+                            <option value="edu">Edu</option>
+                            <option value="sarinea">Sarinea</option>
+                            <option value="conjunto">Conjunto</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                     <div>
+                        <label for="recurring-income-start-date" class="block text-sm font-medium text-slate-400 mb-1">Data do 1º Lançamento</label>
+                        <input type="date" id="recurring-income-start-date" name="startDate" required class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    </div>
+                    <div>
+                        <label for="recurring-income-duration" class="block text-sm font-medium text-slate-400 mb-1">Duração (meses)</label>
+                        <input type="number" id="recurring-income-duration" name="duration" value="12" min="1" class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    </div>
+                </div>
+                 <div class="flex items-center gap-2">
+                    <input type="checkbox" id="recurring-income-indefinite" name="indefinite" class="h-4 w-4 rounded bg-slate-700 border-slate-600 text-teal-500 focus:ring-teal-500">
+                    <label for="recurring-income-indefinite" class="text-sm text-slate-400">Sem prazo definido</label>
+                </div>
+                <div class="flex justify-end pt-4">
+                    <button type="submit" class="bg-teal-600 text-white font-semibold px-6 py-2 rounded-lg shadow-md hover:bg-teal-700 transition-colors">Salvar Renda</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal para Despesa Recorrente -->
+    <div id="recurring-expense-modal" class="modal-backdrop">
+        <div class="modal bg-slate-800 w-11/12 max-w-lg rounded-lg shadow-xl border border-slate-700">
+            <form id="recurring-expense-form" class="p-6 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-white">Nova Despesa Recorrente</h2>
+                     <button type="button" class="close-modal-btn text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+                </div>
+                <div>
+                    <label for="recurring-expense-description" class="block text-sm font-medium text-slate-400 mb-1">Descrição</label>
+                    <input type="text" id="recurring-expense-description" name="description" required class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-rose-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="recurring-expense-amount" class="block text-sm font-medium text-slate-400 mb-1">Valor Mensal (R$)</label>
+                        <input type="number" id="recurring-expense-amount" name="amount" step="0.01" required placeholder="500,00" class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    </div>
+                     <div>
+                        <label for="recurring-expense-category" class="block text-sm font-medium text-slate-400 mb-1">Categoria</label>
+                        <select id="recurring-expense-category" name="category" class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-rose-500">
+                            <option>Moradia</option> <option>Contas</option> <option>Transporte</option> <option>Saúde</option> <option>Alimentação</option> <option>Lazer</option> <option>Outros</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                     <div>
+                        <label for="recurring-expense-start-date" class="block text-sm font-medium text-slate-400 mb-1">Data do 1º Lançamento</label>
+                        <input type="date" id="recurring-expense-start-date" name="startDate" required class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    </div>
+                    <div>
+                        <label for="recurring-expense-duration" class="block text-sm font-medium text-slate-400 mb-1">Duração (meses)</label>
+                        <input type="number" id="recurring-expense-duration" name="duration" value="12" min="1" class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="recurring-expense-indefinite" name="indefinite" class="h-4 w-4 rounded bg-slate-700 border-slate-600 text-rose-500 focus:ring-rose-500">
+                    <label for="recurring-expense-indefinite" class="text-sm text-slate-400">Sem prazo definido</label>
+                </div>
+                 <div>
+                    <label for="recurring-expense-owner" class="block text-sm font-medium text-slate-400 mb-1">Dono</label>
+                    <select id="recurring-expense-owner" name="owner" class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-rose-500">
+                        <option value="edu">Edu</option>
+                        <option value="sarinea">Sarinea</option>
+                        <option value="conjunto">Conjunto</option>
+                    </select>
+                </div>
+                <div class="flex justify-end pt-4">
+                    <button type="submit" class="bg-rose-600 text-white font-semibold px-6 py-2 rounded-lg shadow-md hover:bg-rose-700 transition-colors">Salvar Despesa</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para Confirmação de Exclusão -->
+    <div id="delete-confirm-modal" class="modal-backdrop">
+        <div class="modal bg-slate-800 w-11/12 max-w-md rounded-lg shadow-xl border border-slate-700 p-6">
+            <h2 class="text-xl font-bold text-white mb-4">Confirmar Exclusão</h2>
+            <p id="delete-confirm-message" class="text-slate-300 mb-6">Este é um lançamento recorrente/parcelado. Como você gostaria de excluí-lo?</p>
+            <div class="flex flex-col gap-3">
+                <button id="delete-this-btn" class="w-full bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors">Excluir Somente Este</button>
+                <button id="delete-future-btn" class="w-full bg-yellow-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors">Excluir Este e Futuros</button>
+                <button id="delete-all-btn" class="w-full bg-rose-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-rose-700 transition-colors">Excluir Todos (Passado e Futuro)</button>
+            </div>
+            <div class="mt-6 text-center">
+                 <button id="delete-cancel-btn" class="text-slate-400 hover:text-white">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Módulo Firebase -->
+   <script type="module">
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+      // TODO: Add SDKs for Firebase products that you want to use
+      // https://firebase.google.com/docs/web/setup#available-libraries
+    
+      // Your web app's Firebase configuration
+      const firebaseConfig = {
+        apiKey: "AIzaSyCTtQhhUpTtoAr9D_RnjeDTLwlXVJL74Jk",
+        authDomain: "controle-financeiro-momotis.firebaseapp.com",
+        projectId: "controle-financeiro-momotis",
+        storageBucket: "controle-financeiro-momotis.firebasestorage.app",
+        messagingSenderId: "479734810609",
+        appId: "1:479734810609:web:2546552e5573be53992650"
+      };
+    
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+    </script>
+        
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const mainContent = document.getElementById('main-content');
+        const totalIncomeEl = document.getElementById('total-income');
+        const totalExpenseEl = document.getElementById('total-expense');
+        const monthBalanceEl = document.getElementById('month-balance');
+        const currentMonthYearEl = document.getElementById('current-month-year');
+        const prevMonthBtn = document.getElementById('prev-month');
+        const nextMonthBtn = document.getElementById('next-month');
+        const transactionsListEl = document.getElementById('transactions-list');
+        const noTransactionsEl = document.getElementById('no-transactions');
+        const addTransactionBtn = document.getElementById('add-transaction-btn');
+        const addRecurringIncomeBtn = document.getElementById('add-recurring-income-btn');
+        const addRecurringExpenseBtn = document.getElementById('add-recurring-expense-btn');
+
+        const transactionModal = document.getElementById('transaction-modal');
+        const transactionForm = document.getElementById('transaction-form');
+        const expenseOptions = document.getElementById('expense-options');
+        
+        const recurringIncomeModal = document.getElementById('recurring-income-modal');
+        const recurringIncomeForm = document.getElementById('recurring-income-form');
+        const recurringExpenseModal = document.getElementById('recurring-expense-modal');
+        const recurringExpenseForm = document.getElementById('recurring-expense-form');
+
+        const deleteConfirmModal = document.getElementById('delete-confirm-modal');
+        
+        let currentDate = new Date();
+        let allTransactions = [];
+        let userId = null;
+        let transactionToDeleteContext = null;
+
+        async function setupAuth() {
+            try {
+                if (initialAuthToken) { await signInWithCustomToken(auth, initialAuthToken); } 
+                else { await signInAnonymously(auth); }
+                userId = auth.currentUser?.uid || `anon_${crypto.randomUUID()}`;
+                setupListeners();
+            } catch (error) {
+                console.error("Authentication error:", error);
+                loadingIndicator.innerHTML = "<p class='text-red-400'>Erro de autenticação. Por favor, recarregue a página.</p>";
+            }
+        }
+        
+        const formatMoney = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        const updateMonthDisplay = () => {
+            const monthName = currentDate.toLocaleString('pt-BR', { month: 'long' });
+            currentMonthYearEl.textContent = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${currentDate.getFullYear()}`;
+        };
+
+        const changeMonth = (offset) => {
+            currentDate.setMonth(currentDate.getMonth() + offset);
+            updateAndRender();
+        };
+
+        const renderTransactions = (transactions) => {
+            transactionsListEl.innerHTML = '';
+            noTransactionsEl.style.display = transactions.length === 0 ? 'block' : 'none';
+            if (transactions.length === 0) return;
+
+            transactions.sort((a, b) => new Date(a.date.seconds * 1000) - new Date(b.date.seconds * 1000));
+
+            transactions.forEach(t => {
+                const date = new Date(t.date.seconds * 1000);
+                const isIncome = t.type === 'income';
+                
+                const ownerBadge = { 'edu': 'bg-blue-600', 'sarinea': 'bg-pink-600', 'conjunto': 'bg-purple-600' }[t.owner] || 'bg-gray-600';
+                const ownerText = { 'edu': 'Edu', 'sarinea': 'Sarinea', 'conjunto': 'Conjunto' }[t.owner] || 'N/A';
+                
+                let installmentText = t.installments?.total > 1 ? `<span class="text-xs text-slate-400 ml-2">(${t.installments.current}/${t.installments.total})</span>` : '';
+                let recurringText = t.isRecurring ? `<span class="text-xs text-cyan-400 ml-2">(Recorrente)</span>` : '';
+
+                const el = document.createElement('div');
+                el.className = `flex items-center justify-between p-3 rounded-md bg-slate-700/50`;
+                el.innerHTML = `
+                    <div class="flex items-center gap-4">
+                         <div class="text-center w-10">
+                            <div class="font-bold text-lg">${date.getDate()}</div>
+                            <div class="text-xs text-slate-400">${date.toLocaleString('pt-BR', { month: 'short' })}</div>
+                        </div>
+                        <div>
+                            <p class="font-semibold text-white">${t.description}${installmentText}${recurringText}</p>
+                            <div class="flex items-center gap-2 text-xs text-slate-400">
+                               <span>${isIncome ? 'Entrada' : t.category}</span>
+                               <span class="w-1.5 h-1.5 rounded-full ${ownerBadge}"></span>
+                               <span>${ownerText}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="font-semibold ${isIncome ? 'text-green-400' : 'text-red-400'}">${formatMoney(t.amount)}</span>
+                        <button class="delete-btn text-slate-500 hover:text-red-500" data-id="${t.id}" data-group-id="${t.originalTransactionId || ''}">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                    </div>`;
+                transactionsListEl.appendChild(el);
+            });
+        };
+        
+        const updateSummary = (transactions) => {
+            const income = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+            const expense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+            const balance = income - expense;
+
+            totalIncomeEl.textContent = formatMoney(income);
+            totalExpenseEl.textContent = formatMoney(expense);
+            monthBalanceEl.textContent = formatMoney(balance);
+            monthBalanceEl.classList.toggle('text-green-400', balance >= 0);
+            monthBalanceEl.classList.toggle('text-red-400', balance < 0);
+        };
+        
+        const updateAndRender = () => {
+            updateMonthDisplay();
+            const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+            const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+            
+            const monthTransactions = allTransactions.filter(t => {
+                const transactionDate = new Date(t.date.seconds * 1000);
+                return transactionDate >= startOfMonth && transactionDate <= endOfMonth;
+            });
+            
+            updateSummary(monthTransactions);
+            renderTransactions(monthTransactions);
+        };
+
+        const openModal = (modalEl) => {
+            modalEl.querySelector('form')?.reset();
+            const dateInput = modalEl.querySelector('input[type="date"]');
+            if(dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+            
+            if (modalEl === transactionModal) {
+                 expenseOptions.classList.add('hidden');
+                 document.querySelector('input[name="type"][value="income"]').checked = true;
+            }
+             if (modalEl === recurringIncomeModal) document.getElementById('recurring-income-duration').disabled = false;
+            if (modalEl === recurringExpenseModal) document.getElementById('recurring-expense-duration').disabled = false;
+
+            modalEl.classList.add('show');
+        };
+
+        const closeModal = (modalEl) => modalEl.classList.remove('show');
+        
+        const addTransaction = async (data) => {
+            const { description, amount, date, type, owner, category, installments } = data;
+            const totalInstallments = type === 'expense' ? parseInt(installments, 10) : 1;
+            const valuePerInstallment = amount / totalInstallments;
+            const originalTransactionId = uuid.v4();
+            const batch = writeBatch(db);
+            const transactionCollection = collection(db, `/artifacts/${appId}/public/data/transactions`);
+
+            for (let i = 0; i < totalInstallments; i++) {
+                const installmentDate = new Date(date);
+                installmentDate.setMonth(installmentDate.getMonth() + i);
+                
+                const newTransaction = { description, amount: valuePerInstallment, date: installmentDate, type, owner, userId, originalTransactionId, createdAt: new Date() };
+                if (type === 'expense') {
+                    newTransaction.category = category;
+                    newTransaction.installments = { current: i + 1, total: totalInstallments };
+                }
+                batch.set(doc(transactionCollection), newTransaction);
+            }
+            await batch.commit();
+        };
+        
+        const addRecurringTransaction = async(data, type) => {
+            const { description, amount, owner, startDate, category } = data;
+            const duration = data.indefinite === 'on' ? 120 : parseInt(data.duration, 10);
+            const originalTransactionId = uuid.v4();
+            const batch = writeBatch(db);
+            const transactionCollection = collection(db, `/artifacts/${appId}/public/data/transactions`);
+            
+            for (let i = 0; i < duration; i++) {
+                const recurringDate = new Date(startDate);
+                recurringDate.setMonth(recurringDate.getMonth() + i);
+                
+                const newTransaction = { description, amount, date: recurringDate, type, owner, userId, originalTransactionId, createdAt: new Date(), isRecurring: true };
+                if(type === 'expense') {
+                    newTransaction.category = category;
+                }
+                batch.set(doc(transactionCollection), newTransaction);
+            }
+            await batch.commit();
+        };
+
+        const handleDeleteChoice = async (mode) => {
+            if (!transactionToDeleteContext) return;
+
+            const { id, groupId, date } = transactionToDeleteContext;
+            closeModal(deleteConfirmModal);
+
+            try {
+                const transactionCollection = collection(db, `/artifacts/${appId}/public/data/transactions`);
+                const batch = writeBatch(db);
+
+                if (mode === 'this') {
+                    batch.delete(doc(transactionCollection, id));
+                } else {
+                    const q = query(transactionCollection, where("originalTransactionId", "==", groupId));
+                    const querySnapshot = await getDocs(q);
+                    
+                    querySnapshot.forEach((doc) => {
+                        const itemDate = doc.data().date;
+                        if (mode === 'all' || (mode === 'future' && itemDate.seconds >= date.seconds)) {
+                            batch.delete(doc.ref);
+                        }
+                    });
+                }
+                 await batch.commit();
+            } catch (error) {
+                console.error("Erro durante a exclusão:", error);
+            } finally {
+                transactionToDeleteContext = null;
+            }
+        };
+        
+        const setupListeners = () => {
+            const q = query(collection(db, `/artifacts/${appId}/public/data/transactions`));
+            onSnapshot(q, (querySnapshot) => {
+                allTransactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                loadingIndicator.style.display = 'none';
+                mainContent.classList.remove('hidden');
+                updateAndRender();
+            }, (error) => {
+                console.error("Firestore snapshot error:", error);
+                loadingIndicator.innerHTML = "<p class='text-red-400'>Could not load data.</p>";
+            });
+
+            prevMonthBtn.addEventListener('click', () => changeMonth(-1));
+            nextMonthBtn.addEventListener('click', () => changeMonth(1));
+            
+            addTransactionBtn.addEventListener('click', () => openModal(transactionModal));
+            addRecurringIncomeBtn.addEventListener('click', () => openModal(recurringIncomeModal));
+            addRecurringExpenseBtn.addEventListener('click', () => openModal(recurringExpenseModal));
+
+            document.querySelectorAll('.modal-backdrop').forEach(modalEl => {
+                 modalEl.addEventListener('click', (e) => { if (e.target === modalEl) closeModal(modalEl); });
+            });
+            document.querySelectorAll('.close-modal-btn').forEach(btn => {
+                btn.addEventListener('click', () => closeModal(btn.closest('.modal-backdrop')));
+            });
+
+            transactionForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const data = Object.fromEntries(formData.entries());
+                data.amount = parseFloat(data.amount.replace(',', '.'));
+                const dateParts = data.date.split('-');
+                data.date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+                await addTransaction(data);
+                closeModal(transactionModal);
+            });
+
+            const handleRecurringSubmit = async (e, type, modal) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const data = Object.fromEntries(formData.entries());
+                data.amount = parseFloat(data.amount.replace(',', '.'));
+                const dateParts = data.startDate.split('-');
+                data.startDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+                await addRecurringTransaction(data, type);
+                closeModal(modal);
+            };
+
+            recurringIncomeForm.addEventListener('submit', (e) => handleRecurringSubmit(e, 'income', recurringIncomeModal));
+            recurringExpenseForm.addEventListener('submit', (e) => handleRecurringSubmit(e, 'expense', recurringExpenseModal));
+            
+            document.querySelectorAll('input[name="type"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    expenseOptions.classList.toggle('hidden', e.target.value !== 'expense');
+                });
+            });
+
+            transactionsListEl.addEventListener('click', (e) => {
+                const deleteButton = e.target.closest('.delete-btn');
+                if (deleteButton) {
+                    const id = deleteButton.dataset.id;
+                    const groupId = deleteButton.dataset.groupId;
+                    if (!groupId) {
+                        if (window.confirm("Tem certeza que deseja apagar este lançamento?")) {
+                            transactionToDeleteContext = { id };
+                            handleDeleteChoice('this');
+                        }
+                    } else {
+                        const transaction = allTransactions.find(t => t.id === id);
+                        transactionToDeleteContext = { id, groupId, date: transaction.date };
+                        openModal(deleteConfirmModal);
+                    }
+                }
+            });
+
+            // Listeners for new indefinite checkboxes
+            document.getElementById('recurring-income-indefinite').addEventListener('change', (e) => {
+                document.getElementById('recurring-income-duration').disabled = e.target.checked;
+            });
+            document.getElementById('recurring-expense-indefinite').addEventListener('change', (e) => {
+                document.getElementById('recurring-expense-duration').disabled = e.target.checked;
+            });
+            
+            // Listeners for delete confirmation modal
+            document.getElementById('delete-this-btn').addEventListener('click', () => handleDeleteChoice('this'));
+            document.getElementById('delete-future-btn').addEventListener('click', () => handleDeleteChoice('future'));
+            document.getElementById('delete-all-btn').addEventListener('click', () => handleDeleteChoice('all'));
+            document.getElementById('delete-cancel-btn').addEventListener('click', () => closeModal(deleteConfirmModal));
+        };
+
+        document.addEventListener('DOMContentLoaded', setupAuth);
+    </script>
+</body>
+</html>
