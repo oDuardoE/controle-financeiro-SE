@@ -314,25 +314,25 @@
     </div>
 
     <!-- Módulo Firebase -->
-   <script type="module">
-      // Import the functions you need from the SDKs you need
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
-      // TODO: Add SDKs for Firebase products that you want to use
-      // https://firebase.google.com/docs/web/setup#available-libraries
-    
-      // Your web app's Firebase configuration
-      const firebaseConfig = {
-        apiKey: "AIzaSyCTtQhhUpTtoAr9D_RnjeDTLwlXVJL74Jk",
-        authDomain: "controle-financeiro-momotis.firebaseapp.com",
-        projectId: "controle-financeiro-momotis",
-        storageBucket: "controle-financeiro-momotis.firebasestorage.app",
-        messagingSenderId: "479734810609",
-        appId: "1:479734810609:web:2546552e5573be53992650"
-      };
-    
-      // Initialize Firebase
-      const app = initializeApp(firebaseConfig);
-    </script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, doc, query, where, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Your web app's Firebase configuration - Colado do seu projeto
+        const firebaseConfig = {
+            apiKey: "AIzaSyCTtQhhUpTtoAr9D_RnjeDTLwlXVJL74Jk",
+            authDomain: "controle-financeiro-momotis.firebaseapp.com",
+            projectId: "controle-financeiro-momotis",
+            storageBucket: "controle-financeiro-momotis.appspot.com",
+            messagingSenderId: "479734810609",
+            appId: "1:479734810609:web:2546552e5573be53992650"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
         
         const loadingIndicator = document.getElementById('loading-indicator');
         const mainContent = document.getElementById('main-content');
@@ -366,13 +366,32 @@
 
         async function setupAuth() {
             try {
-                if (initialAuthToken) { await signInWithCustomToken(auth, initialAuthToken); } 
-                else { await signInAnonymously(auth); }
+                // Para o Netlify, usaremos login anônimo.
+                await signInAnonymously(auth);
                 userId = auth.currentUser?.uid || `anon_${crypto.randomUUID()}`;
                 setupListeners();
             } catch (error) {
                 console.error("Authentication error:", error);
-                loadingIndicator.innerHTML = "<p class='text-red-400'>Erro de autenticação. Por favor, recarregue a página.</p>";
+                let errorMessage = "Erro de autenticação. Por favor, recarregue a página.";
+                if (error.code === 'auth/configuration-not-found') {
+                    errorMessage = `
+                        <div class="text-center max-w-lg mx-auto p-4 bg-slate-800 rounded-lg border border-slate-700">
+                            <p class="font-bold text-lg text-red-400">Ação Necessária: Ativar Login Anônimo</p>
+                            <p class="mt-2 text-slate-300">Para o app funcionar, você precisa habilitar o método de login "Anônimo" no seu projeto Firebase.</p>
+                            <ol class="list-decimal list-inside mt-4 text-slate-400 text-left text-sm space-y-1">
+                                <li>Acesse o <a href="https://console.firebase.google.com/" target="_blank" class="text-cyan-400 hover:underline">Console do Firebase</a> e abra seu projeto.</li>
+                                <li>No menu à esquerda, vá em <strong>Build > Authentication</strong>.</li>
+                                <li>Clique na aba <strong>Sign-in method</strong> (Método de login).</li>
+                                <li>Na lista de provedores, clique em <strong>Anônimo</strong> (Anonymous).</li>
+                                <li>Ative a chave e clique em <strong>Salvar</strong>.</li>
+                                <li>Após salvar, recarregue esta página.</li>
+                            </ol>
+                        </div>
+                    `;
+                    loadingIndicator.innerHTML = errorMessage;
+                } else {
+                    loadingIndicator.innerHTML = `<p class='text-red-400'>${errorMessage}</p>`;
+                }
             }
         }
         
@@ -481,6 +500,7 @@
             const valuePerInstallment = amount / totalInstallments;
             const originalTransactionId = uuid.v4();
             const batch = writeBatch(db);
+            const appId = 'momotis-finance-app';
             const transactionCollection = collection(db, `/artifacts/${appId}/public/data/transactions`);
 
             for (let i = 0; i < totalInstallments; i++) {
@@ -502,6 +522,7 @@
             const duration = data.indefinite === 'on' ? 120 : parseInt(data.duration, 10);
             const originalTransactionId = uuid.v4();
             const batch = writeBatch(db);
+            const appId = 'momotis-finance-app';
             const transactionCollection = collection(db, `/artifacts/${appId}/public/data/transactions`);
             
             for (let i = 0; i < duration; i++) {
@@ -524,6 +545,7 @@
             closeModal(deleteConfirmModal);
 
             try {
+                const appId = 'momotis-finance-app';
                 const transactionCollection = collection(db, `/artifacts/${appId}/public/data/transactions`);
                 const batch = writeBatch(db);
 
@@ -549,6 +571,7 @@
         };
         
         const setupListeners = () => {
+            const appId = 'momotis-finance-app';
             const q = query(collection(db, `/artifacts/${appId}/public/data/transactions`));
             onSnapshot(q, (querySnapshot) => {
                 allTransactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -557,7 +580,7 @@
                 updateAndRender();
             }, (error) => {
                 console.error("Firestore snapshot error:", error);
-                loadingIndicator.innerHTML = "<p class='text-red-400'>Could not load data.</p>";
+                loadingIndicator.innerHTML = "<p class='text-red-400'>Não foi possível carregar os dados.</p>";
             });
 
             prevMonthBtn.addEventListener('click', () => changeMonth(-1));
@@ -610,20 +633,31 @@
                 if (deleteButton) {
                     const id = deleteButton.dataset.id;
                     const groupId = deleteButton.dataset.groupId;
-                    if (!groupId) {
-                        if (window.confirm("Tem certeza que deseja apagar este lançamento?")) {
-                            transactionToDeleteContext = { id };
-                            handleDeleteChoice('this');
-                        }
-                    } else {
-                        const transaction = allTransactions.find(t => t.id === id);
+                    const transaction = allTransactions.find(t => t.id === id);
+                    if (!transaction) return;
+            
+                    const messageEl = document.getElementById('delete-confirm-message');
+                    const thisBtn = document.getElementById('delete-this-btn');
+                    const futureBtn = document.getElementById('delete-future-btn');
+                    const allBtn = document.getElementById('delete-all-btn');
+            
+                    if (groupId) {
+                        messageEl.textContent = "Este é um lançamento recorrente/parcelado. Como você gostaria de excluí-lo?";
+                        thisBtn.style.display = 'block';
+                        futureBtn.style.display = 'block';
+                        allBtn.style.display = 'block';
                         transactionToDeleteContext = { id, groupId, date: transaction.date };
-                        openModal(deleteConfirmModal);
+                    } else {
+                        messageEl.textContent = "Tem certeza que deseja apagar este lançamento?";
+                        thisBtn.style.display = 'block';
+                        futureBtn.style.display = 'none';
+                        allBtn.style.display = 'none';
+                        transactionToDeleteContext = { id };
                     }
+                    openModal(deleteConfirmModal);
                 }
             });
 
-            // Listeners for new indefinite checkboxes
             document.getElementById('recurring-income-indefinite').addEventListener('change', (e) => {
                 document.getElementById('recurring-income-duration').disabled = e.target.checked;
             });
@@ -631,7 +665,6 @@
                 document.getElementById('recurring-expense-duration').disabled = e.target.checked;
             });
             
-            // Listeners for delete confirmation modal
             document.getElementById('delete-this-btn').addEventListener('click', () => handleDeleteChoice('this'));
             document.getElementById('delete-future-btn').addEventListener('click', () => handleDeleteChoice('future'));
             document.getElementById('delete-all-btn').addEventListener('click', () => handleDeleteChoice('all'));
